@@ -1,11 +1,77 @@
-#Persistent
-#SingleInstance Force
-SetWorkingDir %A_ScriptDir%
+; #Persistent
+; #SingleInstance Force
+; SetWorkingDir %A_ScriptDir%
+#Include, <Default_Settings>
 
 Menu, Tray, Icon, Shell32.dll, 174
 
 Window := {Width: 590, Height: 390, Title: "Menu Interface"}  ; Version: "0.2"
 Navigation := {Label: ["General", "Advanced", "Language", "Theme", "---", "Help", "About"]}
+
+/*
+   VARIÁVEIS INI (ARQUIVO DE CONFIGURAÇÃO PARA SALVAR DADOS) 
+*/
+if((A_PtrSize=8&&A_IsCompiled="")||!A_IsUnicode){ ;32 bit=4  ;64 bit=8
+   SplitPath,A_AhkPath,,dir
+   if(!FileExist(correct:=dir "\AutoHotkeyU32.exe")){
+      MsgBox error
+      ExitApp
+   }
+   Run,"%correct%" "%A_ScriptName%",%A_ScriptDir%
+   ExitApp
+}
+
+if !InStr(A_OSVersion, "10.")
+   appdata := A_ScriptDir
+else
+   appdata := A_AppData "\" regexreplace(A_ScriptName, "\.\w+"), isWin10 := true
+iniPath = %appdata%\settings.ini
+; se o arquivo não existir, criar ele.
+If(!FileExist(iniPath))
+{
+      FileCreateDir, %appdata% ; criar a pasta
+      FileAppend, "" ,iniPath ; criar o arquivo caso ñ exista
+}
+
+/*
+	CRIAR A MENU BAR
+*/
+Menu, FileMenu, Add, &Abrir o GTM (Felipe)`tCtrl+O, MenuAbrirLink
+Menu, FileMenu, Add, &Abrir o GTM (Propz)`tCtrl+Q, MenuAbrirLink
+Menu, FileMenu, Add ; with no more options, this is a seperator
+; Menu, FileMenu, Add, &Abrir Banco de dados INBOX`tCtrl+I, MenuAbrirLink
+Menu, FileMenu, Add, &Abrir a Pasta de Backup`tCtrl+Q, MenuAbrirLink
+Menu, FileMenu, Add, &Abrir a Pasta de Contas`tCtrl+Q, MenuAbrirLink
+
+Menu, EditMenu, Add, Conectar Conta Google`tCtrl+G, MenuEditarBase
+Menu, EditMenu, Add, Definir Configurações Post Request`tCtrl+S, MenuEditarBase
+Menu, EditMenu, Add, Definir Configurações Get Request`tCtrl+S, MenuEditarBase
+Menu, EditMenu, Add, Abrir Arquivo de Configuração`tCtrl+S, MenuEditarBase
+Menu, EditMenu, Add ; with no more options, this is a seperator
+Menu, EditMenu, Add, &Reiniciar o App`tCtrl+R, MenuAcoesApp
+Menu, EditMenu, Add, &Sair do App`tCtrl+Esc, MenuAcoesApp
+
+Menu, HelpMenu, Add, &Como usar o Programa?, MenuAjudaNotify
+Menu, HelpMenu, Add ; with no more options, this is a seperator
+Menu, HelpMenu, Add, &Qual é a função do botão 'Enviar'?, MenuAjudaNotify
+Menu, HelpMenu, Add, &Qual é a função do botão 'Pesquisar'?, MenuAjudaNotify
+Menu, HelpMenu, Add, &Qual é a função do botão 'Atualizar'?, MenuAjudaNotify
+Menu, HelpMenu, Add, &Qual é a função do menu 'Editar'?, MenuAjudaNotify
+Menu, HelpMenu, Add, &Qual é a função do campo "Filtrar Lista" e "Filtrar Dados"?, MenuAjudaNotify
+Menu, HelpMenu, Add ; with no more options, this is a seperator
+Menu, HelpMenu, Add, &Sobre o programa (Github), MenuAbrirLink
+Menu, HelpMenu, Add, &Desenvolvedor, MenuAbrirLink
+Menu, HelpMenu, Add, &WhatsApp, MenuAbrirLink
+
+; Attach the sub-menus that were created above.
+Menu, MyMenuBar, Add, &Abrir, :FileMenu
+Menu, MyMenuBar, Add, &Editar, :EditMenu
+Menu, MyMenuBar, Add, &Ajuda, :HelpMenu
+Gui, Menu, MyMenuBar ; Attach MyMenuBar to the GUI
+
+/*
+ CRIAR O LAYOUT DA GUI
+*/
 
 Gui +LastFound -Resize +HwndhGui
 Gui Color, FFFFFF
@@ -32,7 +98,20 @@ Loop % Navigation.Label.Length() {
 Gui Font
 
 ; Bottom button and background
-Global HtmlButton1, HtmlButton2
+Global HtmlButton1, HtmlButton2, clientId, clientSecret, view_id, start_date, end_date
+
+view_id := "358422628" ; Substitua pelo ID da sua vista (propriedade)
+start_date := "2024-01-01"
+end_date := "2024-03-30"
+
+clientId := "469887641674-8ourejn84lk7pimu99mnurdsi1nb3n7e.apps.googleusercontent.com"
+clientSecret := "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"
+scope := "https://www.googleapis.com/auth/analytics.readonly"
+
+; Escreve o valor no arquivo .ini
+IniWrite, %clientId%, %iniPath%, APIAuthentication, clientID
+IniWrite, %clientSecret%, %iniPath%, APIAuthentication, clientSecret
+IniWrite, %scope%, %iniPath%, APIAuthentication, scope
 
 NewButton1 := New HtmlButton("HtmlButton1", "OK", "Button1_", (Window.Width-176)-20, (Window.Height-24)-14)
 NewButton2 := New HtmlButton("HtmlButton2", "Cancel", "Button1_", (Window.Width-80)-20, (Window.Height-24)-14)
@@ -89,13 +168,31 @@ P1 := TV_Add("First parent"), P1C1 := TV_Add("Parent 1's first child", P1)
 
 Gui Show, % " w" Window.Width " h" Window.Height, % Window.Title
 
+
+
+
+; response := GetUsers(accessToken)
+; MsgBox % "Resposta da API:" . "`n" . response
+; GoSub, ReadIniFile
+; Exemplo de uso
+
+
 SetPixelColor("E9E9E9", hMenuHover)
 SetPixelColor("0078D7", hMenuSelect)
 Loop 4
     SetPixelColor("D8D8D8", hDividerLine%A_Index%)
 SelectMenu("MenuItem1")
 OnMessage(0x200, "WM_MOUSEMOVE")
+
+; VERIFICAR SE JÁ EXISTE UM CÓDIGO DE ACESSO, SE NÃO EXISTIR, VAI ABRIR O NAVEGADOR E SOLICITAR AUTORIZAÇÃO
+GoSub, ReadIniFile
+ValidateAndRenewToken(clientId, clientSecret, scope)
+
+response := GetUsers(accessToken)
+MsgBox % "Resposta da API:" . "`n" . response
 Return
+
+
 
 MenuClick:
 	SelectMenu(A_GuiControl)
@@ -220,3 +317,137 @@ Class HtmlButton
 		FileDelete, % f
     }
 }
+
+
+
+
+#Include src\connection\oauth-connection.ahk
+#Include src\data-api-beta\get-requests.ahk
+
+
+/*
+      * LABELS DO MENU BAR
+   */
+   ; MENU ABRIR
+   MenuAbrirLink:
+      Gui Submit, NoHide
+      ; if(A_UserName == "Felipe" || A_UserName == "estudos" || A_UserName == "Estudos")
+      ; {
+      ;    user := A_UserName
+      ;    pass := "xrlo1010"
+      ; }
+      ; Else
+      ; {
+      ;    user := "felipe.lullio@hotmail.com"
+      ;    pass := "XrLO1000@1010"
+      ; }
+      ; RunAs, %user%, %pass%
+      If(InStr(A_ThisMenuItem, "Abrir o GTM (Felipe)"))
+      {
+         Run, "C:\Program Files\Google\Chrome\Application\chrome.exe" --profile-directory="Default" "https://tagmanager.google.com/#/home"
+         ; Run, C:\Users\felipe\AppData\Local\Programs\Notion\Notion.exe
+         ; Run %ComSpec% /c C:\Users\felipe\AppData\Local\Programs\Notion\Notion.exe "notion://www.notion.so/%NotionDatabaseLink%", , Hide
+      }
+      Else If(InStr(A_ThisMenuItem, "Abrir o GTM (Propz)"))
+         Run, "C:\Program Files\Google\Chrome\Application\chrome.exe" --profile-directory="Profile 6" "https://tagmanager.google.com/#/home"
+      Else If(InStr(A_ThisMenuItem, "Abrir a Pasta de Backup"))
+         Run, %A_ScriptDir%/Contas-GTM
+      Else If(InStr(A_ThisMenuItem, "Abrir a Pasta de Contas"))
+         Run, %A_ScriptDir%/Contas-GTM
+      Else If(InStr(A_ThisMenuItem, "WhatsApp"))
+         Run, https://wa.me/5511991486309
+      Else If(InStr(A_ThisMenuItem, "Desenvolvedor"))
+         Run, https://www.lullio.com.br
+   return
+
+   ; MENU EDITAR - REINICIAR E FECHAR APP
+   MenuAcoesApp:
+      If(InStr(A_ThisMenuItem, "Sair"))
+         ExitApp
+      Else If(InStr(A_ThisMenuItem, "Reiniciar"))
+         Reload
+   return
+
+   ; MENU EDITAR - CONFIGURAÇÕES DAS REQUISIÇÕES E AUTENTICAÇÃO API
+   MenuEditarBase:
+   ; msgbox % A_ThisMenuItem
+      If(InStr(A_ThisMenuItem, "Definir Configurações Post Request"))
+      {
+         ; MsgBox, Open Menu was clicked
+         Gui, ConfigFile:New, +AlwaysOnTop -Resize -MinimizeBox -MaximizeBox, Configurações da API
+         Gui, ConfigFile:Add, Text,cRed, CUIDADO: Altere somente se souber o que está fazendo
+
+         /*
+         * COLUNA 1 - linha inteira
+         */
+         Gui, ConfigFile:Font, S9
+         Gui, ConfigFile:Add, Text, center section h20, Client ID:
+         Gui, ConfigFile:Add, Text, center, Client Secret:
+         Gui, ConfigFile:Add, Text,center, Scope:
+         Gui, ConfigFile:Add, Text,center, Código de Autorização:
+         Gui, ConfigFile:Add, Text,center, Token de Acesso:
+         Gui, ConfigFile:Add, Text,center, Token de Renovação:
+         Gui, ConfigFile:Add, Text,center, Código Verificador(random):
+
+         Gui, ConfigFile:Add, Edit, Password w350 ys x+30 vClientID
+         Gui, ConfigFile:Add, Edit, Password w350 vClientSecret
+         Gui ,ConfigFile:Add, ComboBox, w350 center vScope hwndScopeID, https://www.googleapis.com/auth/tagmanager.delete.containers https://www.googleapis.com/auth/tagmanager.edit.containers https://www.googleapis.com/auth/tagmanager.edit.containerversions https://www.googleapis.com/auth/tagmanager.manage.accounts https://www.googleapis.com/auth/tagmanager.manage.users https://www.googleapis.com/auth/tagmanager.publish 	||https://www.googleapis.com/auth/tagmanager.edit.containers|https://www.googleapis.com/auth/tagmanager.readonly|https://www.googleapis.com/auth/tagmanager.delete.containers|https://www.googleapis.com/auth/tagmanager.edit.containerversions|https://www.googleapis.com/auth/tagmanager.publish|https://www.googleapis.com/auth/tagmanager.manage.users|https://www.googleapis.com/auth/tagmanager.manage.accounts
+         Gui, ConfigFile:Add, Edit, Password w350 vAuthorizedCode
+         Gui, ConfigFile:Add, Edit, Password w350 vAccessToken
+         Gui, ConfigFile:Add, Edit, Password w350 vRefreshToken
+         Gui, ConfigFile:Add, Edit, w350 vCodigoVerificador
+
+         gui, ConfigFile:font, S11 ;Change font size to 12
+         gui, ConfigFile:Add, Button, center y+15 w90 gSaveToIniFile, &Salvar
+         GoSub, ReadIniFile
+         Gui, ConfigFile:Show, xCenter yCenter
+      }Else If(InStr(A_ThisMenuItem, "Definir Configurações Get Request"))
+      {
+         ;   GoSub, ConnectToGTM
+      }
+      Else If(InStr(A_ThisMenuItem, "Conectar Conta Google"))
+      {
+         accessToken := GetAccessToken(clientId, clientSecret, scope)
+         GoSub, ReadIniFile
+         ValidateAndRenewToken(clientId, clientSecret)
+      }
+      Else If(InStr(A_ThisMenuItem, "Abrir Arquivo de Configura"))
+      {
+         ; MSGBOX HI
+         Run % appdata
+         Run % iniPath
+      }
+      
+   Return
+
+   ; MENU AJUDA
+   MenuAjudaNotify:
+      If(InStr(A_ThisMenuItem, "filtrar dados"))
+         ; msgbox SUCESSO com SOM e ICONE alwaysontop
+         MsgBox, 4160 , INFORMAÇÃO!, O campo "Filtrar Dados" destina-se a filtrar os dados da consulta ao banco de dados. `n`nEsse filtro tem a finalidade de excluir tarefas que foram arquivadas.`n`nObs: Existem duas checkboxes`, uma na tela principal e outra na tela de configurações do get request`, as duas são verificadas., 900
+      Else If(InStr(A_ThisMenuItem, "como usar o programa"))
+         ; msgbox SUCESSO com SOM e ICONE alwaysontop
+         MsgBox, 4160 , INFORMAÇÃO!, 1. Para abrir uma tarefa no Notion`, clique com o botão esquerdo do mouse em qualquer item da Lista.`n`n2. Para arquivar ou desarquivar uma tarefa`, clique com o botão direito do mouse em qualquer item da Lista., 900
+      Else If(InStr(A_ThisMenuItem, "Qual é a função do botão 'Enviar'"))
+         ; msgbox SUCESSO com SOM e ICONE alwaysontop
+         MsgBox, 4160 , INFORMAÇÃO!, O botão 'Enviar' tem a finalidade de cadastrar uma tarefa no banco de dados do Notion.`n`nVocê pode configurar e modificar qual banco de dados deseja utilizar nas opções do menu 'Editar' (CTRL+E)., 900
+      Else If(InStr(A_ThisMenuItem, "Qual é a função do botão 'Pesquisar'"))
+         ; msgbox SUCESSO com SOM e ICONE alwaysontop
+         MsgBox, 4160 , INFORMAÇÃO!, O botão "Pesquisar" tem a finalidade de buscar uma tarefa na lista de tarefas exibida acima.`n`n O campo de pesquisa permite o uso de expressões regulares (regex) e`, por padrão`, a pesquisa não diferencia maiúsculas de minúsculas (não é "casesensitive").`n`nObservação:Você pode realizar uma pesquisa clicando no botão 'Pesquisar' ou pressionando a tecla 'Enter' no teclado., 900
+      Else If(InStr(A_ThisMenuItem, "Qual é a função do botão 'Atualizar'"))
+         ; msgbox SUCESSO com SOM e ICONE alwaysontop
+         MsgBox, 4160 , INFORMAÇÃO!, O botão 'Atualizar' tem a função de enviar uma nova requisição HTTP à API do Notion e`, assim`, recarregar os dados na lista., 900
+      Else If(InStr(A_ThisMenuItem, "Qual é a função do menu 'Editar'"))
+         ; msgbox SUCESSO com SOM e ICONE alwaysontop
+         MsgBox, 4160 , INFORMAÇÃO!, Dentro do menu 'Editar'`, você encontra a opção para definir e editar as configurações das requisições HTTP GET e POST.`n`nObservação: faça alterações apenas se estiver familiarizado com o processo`, pois trata-se de uma configuração ""avançada"""., 900
+   Return
+
+
+
+
+
+
+
+
+
+
